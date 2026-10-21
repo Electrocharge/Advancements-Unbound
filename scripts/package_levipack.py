@@ -14,7 +14,7 @@ manifest = {
     "name": "Advancements",
     "author": "Electrocharge",
     "description": "Minecraft-style advancement trees with category icons, labels, descriptions, and LeviLamroid pause-menu integration.",
-    "version": "0.9.7",
+    "version": "0.9.8",
     "entry": "libAdvancementsLeviLamroid.so",
     "icon": "icon.jpg",
     "minecraft_versions": ["1.26.5*.**"],

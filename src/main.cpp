@@ -57,6 +57,7 @@ constexpr uint32_t kLockedText = 0xFF9B9B9Bu;
 
 bool gOpen = false;
 bool gPauseMenuActive = false;
+bool gPauseStateInitialized = false;
 // Start in Everywhere mode because LeviLamroid may call enable() before it
 // sends the persisted module configuration callback. Starting false caused
 // enable() to unregister the button before the saved radio value arrived.
@@ -458,7 +459,16 @@ void onConfigChanged(std::string_view moduleId, std::string_view key, std::strin
         syncButtonVisibility();
         drawPanel();
     }
-    if (key==kUiStyle) { gJavaStyle=value=="1" || value=="Java UI" || value=="java"; drawPanel(); }
+    if (key==kUiStyle) {
+        std::string style(value);
+        std::transform(style.begin(), style.end(), style.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        gJavaStyle = style == "1" || style == "java" || style == "java ui" ||
+                     style.find("java") != std::string::npos;
+        logLine(std::string("Java UI state: ") + (gJavaStyle ? "enabled" : "disabled"));
+        drawPanel();
+    }
     if (key==kPopup) { gPopupEnabled=value=="1"; if (!gPopupEnabled) drawPanel(); }
     if (key==kChat) { gChatEnabled=value=="1"; }
     if (key=="ui_scale" || key=="scale") {
@@ -538,6 +548,23 @@ void onStartMenuOpen() {
     }
 }
 
+void refreshPauseVisibility() {
+    if (gShowEverywhere) {
+        gPauseStateInitialized = false;
+        return;
+    }
+    const bool inPause = ll::ui::isInPauseMenu();
+    if (gPauseStateInitialized && inPause == gPauseMenuActive) return;
+    gPauseStateInitialized = true;
+    gPauseMenuActive = inPause;
+    logLine(std::string("polled pause state: ") + (inPause ? "open" : "closed"));
+    if (!inPause) {
+        gOpen = false;
+        pl::modmenu::submitDrawCommands(kModule, {});
+    }
+    syncButtonVisibility();
+}
+
 class AdvancementsClean {
 public:
     bool load(pl::mod::ModContext &) {
@@ -582,6 +609,7 @@ public:
         pl::input::registerTouchCallback(onTouch);
         ll::render::registerPostClearCallback([](int width, int height) {
             gHudSurface = {static_cast<float>(width), static_cast<float>(height)};
+            refreshPauseVisibility();
             if (gOpen) drawPanel(); else if (gPopupUntilMs > nowMs()) drawPopupOnly();
         });
         ll::ui::onPauseMenuOpen(onPauseMenuOpen);

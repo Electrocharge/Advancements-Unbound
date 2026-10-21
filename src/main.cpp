@@ -450,7 +450,11 @@ bool onTouch(const pl::input::TouchEvent &event) {
 void onConfigChanged(std::string_view moduleId, std::string_view key, std::string_view value) {
     if (moduleId != kModule) return;
     logLine("config changed: key="+std::string(key)+" value="+std::string(value));
-    if (key==kVisibility) { gShowEverywhere=value=="1"; syncButtonVisibility(); drawPanel(); }
+    if (key==kVisibility) {
+        gShowEverywhere = value == "1" || value == "Everywhere" || value == "everywhere";
+        syncButtonVisibility();
+        drawPanel();
+    }
     if (key==kUiStyle) { gJavaStyle=value=="1" || value=="Java UI" || value=="java"; drawPanel(); }
     if (key==kPopup) { gPopupEnabled=value=="1"; if (!gPopupEnabled) drawPanel(); }
     if (key==kChat) { gChatEnabled=value=="1"; }
@@ -493,10 +497,9 @@ bool registerVisibleButton() {
 }
 
 void syncButtonVisibility() {
+    pl::modmenu::unregisterButton(kVisibleButton);
     if (gShowEverywhere || gPauseMenuActive) {
         registerVisibleButton();
-    } else {
-        pl::modmenu::unregisterButton(kVisibleButton);
     }
 }
 
@@ -554,7 +557,12 @@ public:
             .config("chat","Advancement chat message",pl::modmenu::ConfigType::Toggle,"1")
             .onConfigChanged(onConfigChanged).registerModule()) { logLine("load failed: module registration"); return false; }
         // Pause-only is the default. The button is registered by the pause
-        // callback; Everywhere mode registers it from configuration changes.
+        // callback after the title screen opens. Register once immediately as
+        // a fallback because some LeviLamroid builds load a mod after the
+        // initial pause/start-menu lifecycle event and do not replay it.
+        const bool buttonRegistered = registerVisibleButton();
+        logLine(std::string("initial Advancements button registration: ") +
+                (buttonRegistered ? "success" : "failed"));
         gCompleted.assign(256,false);
         constexpr std::string_view chatSignature = "? ? ? D1 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 59 D0 3B D5 F3 03 00 AA F4 03 05 AA";
         gDisplayClientMessageTarget = pl::memory::resolveSignature(chatSignature, "libminecraftpe.so");

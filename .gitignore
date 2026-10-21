@@ -1,0 +1,6 @@
+build/
+build-*/
+final-delivery-*/
+**/__pycache__/
+*.dmp
+*.crashedsession

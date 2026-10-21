@@ -20,14 +20,9 @@
 #include <pl/memory/Hook.hpp>
 #include <pl/memory/Signature.hpp>
 
-#include "nmdk/NMDK.hpp"
-#include "nmdk/api/ui/JsonUIButtonRegistry.hpp"
-#include "nmdk/events/ClientInstance.hpp"
-#include "nmdk/events/ToastManager.hpp"
-#include "mc/client/gui/ViewRequest.h"
-#include "mc/client/gui/screens/ScreenController.h"
-#include "mc/world/actor/Actor.h"
-#include "mc/world/item/ItemStackBase.h"
+#include <ll/api/service/Bedrock.h>
+#include <ll/api/ui/UI.h>
+#include <ll/api/render/Render.h>
 
 #include "advancements/Version.hpp"
 #include "advancements/catalog.hpp"
@@ -40,9 +35,6 @@ void logLine(std::string_view message) {
 }
 constexpr std::string_view kModule = "advancements_android_icons";
 constexpr std::string_view kVisibleButton = "advancements.icons.open";
-// NMDK currently injects and wires this predefined JSON control. Arbitrary
-// button names are not added to Bedrock's menu JSON by the public registry.
-constexpr std::string_view kJsonButton = "button.nmdk_modmenu";
 constexpr std::string_view kVisibility = "visibility";
 constexpr std::string_view kUiStyle = "ui_style";
 constexpr std::string_view kPopup = "popup";
@@ -64,10 +56,7 @@ constexpr uint32_t kText = 0xFFF5F5F5u;
 constexpr uint32_t kLockedText = 0xFF9B9B9Bu;
 
 bool gOpen = false;
-// Start permissive until NMDK delivers its first screen-state event. This
-// prevents the pause button from becoming inert when the mod loads after the
-// initial ClientInstance event.
-bool gIsPreGame = false;
+bool gPauseMenuActive = false;
 bool gShowEverywhere = false;
 float gUiScale = 1.0f;
 bool gJavaStyle = false;
@@ -78,7 +67,6 @@ std::string gPopupDescription;
 std::uint64_t gPopupUntilMs = 0;
 std::string gPopupId;
 void *gLastGuiData = nullptr;
-ClientInstance *gClientInstance = nullptr;
 using DisplayClientMessageFn = void (*)(void *, const std::string &, const std::optional<std::string> &, bool);
 DisplayClientMessageFn gDisplayClientMessageOriginal = nullptr;
 std::uintptr_t gDisplayClientMessageTarget = 0;
@@ -89,12 +77,15 @@ std::uintptr_t gGuiDataAddMessageTarget = 0;
 pl::memory::HookHandle gGuiDataAddMessageHook;
 void drawPanel();
 void drawPopupOnly();
+void syncButtonVisibility();
 int gCategory = 0;
 std::size_t gSelected = 0;
 std::vector<bool> gCompleted;
 std::uintptr_t gWorldKey = 0;
 std::unordered_map<std::uintptr_t, std::vector<bool>> gWorldCompleted;
 std::vector<unsigned char> gBoardTexture;
+struct SurfaceSize { float width{}; float height{}; };
+SurfaceSize gHudSurface;
 
 float gPanelX = 0.f, gPanelY = 0.f, gPanelW = 0.f, gPanelH = 0.f;
 float gTabX = 0.f, gTabW = 0.f, gTabY = 0.f, gTabH = 0.f;
@@ -208,86 +199,36 @@ void markCompletedByText(std::string_view text) {
     }
 }
 
-void checkStoneAgeFromHeldItem() {
-    const auto absolute = categoryBase(0) + 10; // story/mine_stone
-    if (!gClientInstance || absolute >= gCompleted.size() || gCompleted[absolute]) return;
-    auto *player = gClientInstance->getLocalPlayer();
-    if (!player) return;
-    for (int slot = 0; slot < 2; ++slot) {
-        auto *stack = player->getHand(slot);
-        if (!stack) continue;
-        auto *item = stack->mItem.get();
-        if (!item) continue;
-        const auto &id = item->mRawNameId;
-        if (id == "cobblestone" || id == "blackstone" || id == "cobbled_deepslate" || id == "stone_pickaxe") {
-            announceCompletion(0, 10);
-            return;
-        }
-    }
-}
-
-// NMDK's compact ToastMessage header exposes only mType, but the matching
-// Bedrock SDK layout places title, subtitle, and messageId immediately after
-// it. Using those real fields is safer and more reliable than scanning random
-// bytes for printable strings.
-struct ToastStringField {
-    std::string value;
-    unsigned char storagePadding[8]{};
-};
-static_assert(sizeof(ToastStringField) == 32);
-
-struct ToastMessageLayout {
-    void *listener{};
-    bool merging{};
-    bool customPocket{};
-    bool useCustomPocket{};
-    bool silent{};
-    ToastMessageType type{};
-    ToastStringField title;
-    ToastStringField subtitle;
-    ToastStringField messageId;
-};
-static_assert(offsetof(ToastMessageLayout, type) == 0x0C);
-static_assert(offsetof(ToastMessageLayout, title) == 0x10);
-static_assert(offsetof(ToastMessageLayout, subtitle) == 0x30);
-static_assert(offsetof(ToastMessageLayout, messageId) == 0x50);
-
-void updateFromAchievementToast(ToastMessage *message) {
-    if (!message) { logLine("ToastManager delivered a null toast"); return; }
-    logLine("toast received: type="+std::to_string(static_cast<int>(message->mType)));
-    if (message->mType != ToastMessageType::Achievement) { logLine("toast ignored: non-achievement type"); return; }
-    const auto *toast = reinterpret_cast<const ToastMessageLayout *>(message);
-    logLine("achievement toast fields: title='"+toast->title.value+"' subtitle='"+toast->subtitle.value+"' messageId='"+toast->messageId.value+"'");
-    markCompletedByText(toast->title.value);
-    markCompletedByText(toast->subtitle.value);
-    markCompletedByText(toast->messageId.value);
-}
-
-void displayClientMessageHook(void *guiData, const std::string &message, const std::optional<std::string> &filtered, bool ttsRequired) {
+void displayClientMessageHook(void *guiData, const std::string &message,
+                              const std::optional<std::string> &filtered,
+                              bool ttsRequired) {
     gLastGuiData = guiData;
-    logLine("GuiData displayClientMessage: guiData="+std::to_string(reinterpret_cast<std::uintptr_t>(guiData))+" tts="+(ttsRequired?"true":"false")+" text='"+message+"'");
-    if (gDisplayClientMessageOriginal) gDisplayClientMessageOriginal(guiData, message, filtered, ttsRequired);
-    // Some Bedrock builds announce achievement text through GuiData rather
-    // than ToastManager. Match only known catalog titles; recipe/system chat
-    // messages therefore cannot unlock an unrelated advancement.
+    logLine("GuiData displayClientMessage: text='" + message + "'");
+    if (gDisplayClientMessageOriginal) {
+        gDisplayClientMessageOriginal(guiData, message, filtered, ttsRequired);
+    }
     markCompletedByText(message);
 }
 
-void guiDataAddMessageHook(void *guiData, void *guiMessage, std::int32_t profanityFilterContext) {
+void guiDataAddMessageHook(void *guiData, void *guiMessage,
+                           std::int32_t profanityFilterContext) {
     gLastGuiData = guiData;
-    logLine("GuiData addMessage: guiData="+std::to_string(reinterpret_cast<std::uintptr_t>(guiData))+" message="+std::to_string(reinterpret_cast<std::uintptr_t>(guiMessage))+" profanityContext="+std::to_string(profanityFilterContext));
+    logLine("GuiData addMessage: message=" +
+            std::to_string(reinterpret_cast<std::uintptr_t>(guiMessage)));
     if (guiMessage) {
-        // Current Bedrock GuiMessage stores its rendered full string at +0x70.
-        // This path catches achievement/system text even when the overload
-        // hooked above is not called.
+        // This is the Bedrock 1.26 GuiMessage full-string field used by the
+        // previous working port. Guard the small type range before reading it.
         auto *bytes = static_cast<unsigned char *>(guiMessage);
         const auto type = *reinterpret_cast<const std::int32_t *>(bytes);
         if (type >= 1 && type <= 8) {
-            const auto &fullString = *reinterpret_cast<const std::string *>(bytes + 0x70);
+            const auto &fullString =
+                *reinterpret_cast<const std::string *>(bytes + 0x70);
             markCompletedByText(fullString);
         }
     }
-    if (gGuiDataAddMessageOriginal) gGuiDataAddMessageOriginal(guiData, guiMessage, profanityFilterContext);
+    if (gGuiDataAddMessageOriginal) {
+        gGuiDataAddMessageOriginal(guiData, guiMessage, profanityFilterContext);
+    }
 }
 
 void createBoardTexture() {
@@ -307,7 +248,7 @@ void createBoardTexture() {
 void drawDefaultPanel() {
     if (!gOpen) { pl::modmenu::submitDrawCommands(kModule, {}); return; }
     if (gUiScale <= 0.001f) { pl::modmenu::submitDrawCommands(kModule, {}); return; }
-    const auto surface = pl::modmenu::getHudSurfaceSize();
+    const auto surface = gHudSurface;
     if (surface.width <= 0.f || surface.height <= 0.f) return;
     const float scale = std::clamp(std::min(surface.width / 1120.f, surface.height / 560.f), 0.72f, 1.35f) * std::clamp(gUiScale, 0.0f, 1.0f);
     const float w = 840.f * scale, h = 500.f * scale;
@@ -418,7 +359,7 @@ std::string javaTextureId(std::string_view id) {
 void drawJavaPanel() {
     if (!gOpen) { pl::modmenu::submitDrawCommands(kModule, {}); return; }
     if (gUiScale <= 0.001f) { pl::modmenu::submitDrawCommands(kModule, {}); return; }
-    const auto surface = pl::modmenu::getHudSurfaceSize();
+    const auto surface = gHudSurface;
     if (surface.width <= 0.f || surface.height <= 0.f) return;
     const float scale = std::clamp(std::min(surface.width / 720.f, surface.height / 470.f), 0.70f, 1.45f) * gUiScale;
     const float w=720.f*scale,h=470.f*scale,x=(surface.width-w)*.5f,y=(surface.height-h)*.5f;
@@ -471,7 +412,7 @@ void drawPanel() { if (gJavaStyle) drawJavaPanel(); else drawDefaultPanel(); }
 
 void drawPopupOnly() {
     if (!gPopupEnabled || gPopupUntilMs <= nowMs()) { pl::modmenu::submitDrawCommands(kModule, {}); return; }
-    const auto surface = pl::modmenu::getHudSurfaceSize();
+    const auto surface = gHudSurface;
     const float scale = std::clamp(std::min(surface.width / 1000.f, surface.height / 620.f), 0.65f, 1.15f) * gUiScale;
     // Bedrock places recipe-unlocked notifications in the upper-right area.
     // Keep this mod's advancement toast in the lower-right so both remain
@@ -509,7 +450,7 @@ bool onTouch(const pl::input::TouchEvent &event) {
 void onConfigChanged(std::string_view moduleId, std::string_view key, std::string_view value) {
     if (moduleId != kModule) return;
     logLine("config changed: key="+std::string(key)+" value="+std::string(value));
-    if (key==kVisibility) { gShowEverywhere=value=="1"; drawPanel(); }
+    if (key==kVisibility) { gShowEverywhere=value=="1"; syncButtonVisibility(); drawPanel(); }
     if (key==kUiStyle) { gJavaStyle=value=="1" || value=="Java UI" || value=="java"; drawPanel(); }
     if (key==kPopup) { gPopupEnabled=value=="1"; if (!gPopupEnabled) drawPanel(); }
     if (key==kChat) { gChatEnabled=value=="1"; }
@@ -522,19 +463,9 @@ void onConfigChanged(std::string_view moduleId, std::string_view key, std::strin
     }
 }
 
-ui::ViewRequest onJsonButton(void *) {
-    // MainMenu is pre-game; StartMenu while a world is loaded is the pause menu.
-    // The button is therefore inert on the title screen and active only in-world.
-    if (gIsPreGame && !gShowEverywhere) return ui::ViewRequest::None;
-    checkStoneAgeFromHeldItem();
-    gOpen=!gOpen; if(gOpen) gSelected=0; drawPanel();
-    return static_cast<ui::ViewRequest>(static_cast<unsigned int>(ui::ViewRequest::ConsumeEvent)|static_cast<unsigned int>(ui::ViewRequest::DelayedFocusRefresh));
-}
-
 void onVisibleButton(std::string_view, pl::modmenu::ButtonEvent event, float) {
     if (event != pl::modmenu::ButtonEvent::Click) return;
-    if (gIsPreGame && !gShowEverywhere) return;
-    checkStoneAgeFromHeldItem();
+    if (!gShowEverywhere && !gPauseMenuActive) return;
     gOpen = !gOpen;
     if (gOpen) gSelected = 0;
     drawPanel();
@@ -561,6 +492,46 @@ bool registerVisibleButton() {
     return pl::modmenu::registerButton(info);
 }
 
+void syncButtonVisibility() {
+    if (gShowEverywhere || gPauseMenuActive) {
+        registerVisibleButton();
+    } else {
+        pl::modmenu::unregisterButton(kVisibleButton);
+    }
+}
+
+void onPauseMenuOpen(void *) {
+    gPauseMenuActive = true;
+    const auto *level = ll::service::getLevel();
+    const auto nextKey = reinterpret_cast<std::uintptr_t>(level);
+    logLine("LeviLamroid pause menu opened: level=" + std::to_string(nextKey));
+    if (nextKey != 0 && nextKey != gWorldKey) {
+        if (gWorldKey != 0) gWorldCompleted[gWorldKey] = gCompleted;
+        gWorldKey = nextKey;
+        auto &state = gWorldCompleted[gWorldKey];
+        if (state.empty()) state.assign(256, false);
+        gCompleted = state;
+    }
+    syncButtonVisibility();
+}
+
+void onPauseMenuClose(void *) {
+    gPauseMenuActive = false;
+    gOpen = false;
+    drawPanel();
+    logLine("LeviLamroid pause menu closed");
+    syncButtonVisibility();
+}
+
+void onStartMenuOpen() {
+    if (!gShowEverywhere) {
+        gPauseMenuActive = false;
+        gOpen = false;
+        drawPanel();
+        syncButtonVisibility();
+    }
+}
+
 class AdvancementsClean {
 public:
     bool load(pl::mod::ModContext &) {
@@ -582,11 +553,8 @@ public:
             .config("popup","Advancement popup",pl::modmenu::ConfigType::Toggle,"1")
             .config("chat","Advancement chat message",pl::modmenu::ConfigType::Toggle,"1")
             .onConfigChanged(onConfigChanged).registerModule()) { logLine("load failed: module registration"); return false; }
-        if (!registerVisibleButton()) {
-            pl::modmenu::unregisterModule(kModule);
-            logLine("load failed: visible button registration");
-            return false;
-        }
+        // Pause-only is the default. The button is registered by the pause
+        // callback; Everywhere mode registers it from configuration changes.
         gCompleted.assign(256,false);
         constexpr std::string_view chatSignature = "? ? ? D1 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 59 D0 3B D5 F3 03 00 AA F4 03 05 AA";
         gDisplayClientMessageTarget = pl::memory::resolveSignature(chatSignature, "libminecraftpe.so");
@@ -601,34 +569,27 @@ public:
         }
         logLine("GuiData addMessage hook target="+std::to_string(gGuiDataAddMessageTarget)+" installed="+((gGuiDataAddMessageOriginal)?"true":"false"));
         pl::input::registerTouchCallback(onTouch);
-        nmdk::getEventBus().subscribe<ClientInstanceIsPreGameEvent>([](ClientInstanceIsPreGameEvent &event){
-            gClientInstance=event.mClient;
-            gLastGuiData=event.mClient?event.mClient->getGuiData():nullptr;
-            const auto nextKey=reinterpret_cast<std::uintptr_t>(event.mClient);
-            logLine("client instance event: client="+std::to_string(nextKey)+" preGame="+(event.getIsPreGame()?"true":"false")+" guiData="+std::to_string(reinterpret_cast<std::uintptr_t>(gLastGuiData)));
-            if (nextKey != 0 && nextKey != gWorldKey) {
-                if (gWorldKey != 0) gWorldCompleted[gWorldKey]=gCompleted;
-                gWorldKey=nextKey;
-                auto &state=gWorldCompleted[gWorldKey];
-                if (state.empty()) state.assign(256,false);
-                gCompleted=state;
-            }
-            gIsPreGame=event.getIsPreGame();
-            if(gIsPreGame){gOpen=false;drawPanel();}
+        ll::render::registerPostClearCallback([](int width, int height) {
+            gHudSurface = {static_cast<float>(width), static_cast<float>(height)};
+            if (gOpen) drawPanel(); else if (gPopupUntilMs > nowMs()) drawPopupOnly();
         });
-        nmdk::getEventBus().subscribe<ToastManagerPushToastEvent>([](ToastManagerPushToastEvent &event){logLine("ToastManagerPushToastEvent received");updateFromAchievementToast(event.getMessage());if(gOpen)drawPanel();});
-        nmdk::ui::JsonUIButtonRegistry::getInstance().registerButton(std::string(kJsonButton),ButtonState::Down,nmdk::ui::PreviousButtonState::NotDown,onJsonButton);
+        ll::ui::onPauseMenuOpen(onPauseMenuOpen);
+        ll::ui::onPauseMenuClose(onPauseMenuClose);
+        ll::ui::onStartMenuOpen(onStartMenuOpen);
+        // LeviLamroid routes custom button events through its pause-screen UI
+        // hooks. The floating PreLoader button is registered only while the
+        // pause screen is active unless the user selects Everywhere.
+        logLine("registered LeviLamroid pause-menu callbacks");
         logLine("load complete: hooks and event listeners registered");
         return true;
     }
-    bool enable(pl::mod::ModContext &) { logLine("enable"); pl::modmenu::setModuleEnabled(kModule,true); return true; }
-    bool disable(pl::mod::ModContext &) { logLine("disable"); gOpen=false;drawPanel();pl::modmenu::setModuleEnabled(kModule,false);return true; }
+    bool enable(pl::mod::ModContext &) { logLine("enable"); pl::modmenu::setModuleEnabled(kModule,true); syncButtonVisibility(); return true; }
+    bool disable(pl::mod::ModContext &) { logLine("disable"); gOpen=false;drawPanel();pl::modmenu::setModuleEnabled(kModule,false);pl::modmenu::unregisterButton(kVisibleButton); return true; }
     bool unload(pl::mod::ModContext &) {
         logLine("unload"); gOpen=false;pl::modmenu::submitDrawCommands(kModule,{});
         pl::modmenu::unregisterButton(kVisibleButton);
-        nmdk::ui::JsonUIButtonRegistry::getInstance().unregisterButton(std::string(kJsonButton));
         gDisplayClientMessageHook.reset();
-        gDisplayClientMessageOriginal=nullptr; gDisplayClientMessageTarget=0; gLastGuiData=nullptr; gClientInstance=nullptr; gWorldKey=0; gWorldCompleted.clear();
+        gDisplayClientMessageOriginal=nullptr; gDisplayClientMessageTarget=0; gLastGuiData=nullptr; gWorldKey=0; gWorldCompleted.clear();
         gGuiDataAddMessageHook.reset();
         gGuiDataAddMessageOriginal=nullptr; gGuiDataAddMessageTarget=0;
         pl::modmenu::unregisterModule(kModule);gBoardTexture.clear();gCompleted.clear();return true;

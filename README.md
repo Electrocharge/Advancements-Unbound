@@ -1,10 +1,10 @@
-# Advancements 0.9.2
+# Advancements 0.9.4
 
 Advancements is an Android ARM64 native mod for LeviLaunchroid/LeviLamroid and Minecraft Bedrock `1.26.5*.**`. It provides five Minecraft-style advancement categories, embedded Minecraft item icons, locked/unlocked node states, completion popups, completion chat messages, per-world session state, a scale slider, and Default UI/Java UI styles.
 
 ## LeviLamroid integration
 
-This version does not include or link against NMDK. It uses LeviLamroid’s public APIs for pause-menu lifecycle callbacks, render-surface dimensions, Preloader draw commands, touch callbacks, and mod registration. The default visibility mode registers the Android **Advancements** button only after `ll::ui::onPauseMenuOpen` and unregisters it on `ll::ui::onPauseMenuClose`. Selecting **Everywhere** keeps the button registered outside the pause screen as well.
+This version does not include or link against NMDK. It uses LeviLamroid’s public APIs for pause-menu lifecycle callbacks, render-surface dimensions, Preloader draw commands, touch callbacks, and mod registration. **Everywhere is the initial visibility state**, so the button is registered even if LeviLamroid’s persisted configuration callback arrives after the enable phase. Selecting **Pause screen only** unregisters it outside the pause screen; selecting **Everywhere** keeps it registered outside the pause screen as well.
 
 The mod still uses Preloader’s native draw-command and signature-hook interfaces for rendering and for observing Bedrock `GuiData` chat traffic. Completion matching is deliberately title/key based so recipe-unlock messages cannot unlock unrelated advancements. The chat hook accepts catalog titles and known Bedrock achievement aliases; notifications are deduplicated per world-session key.
 

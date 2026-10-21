@@ -57,7 +57,10 @@ constexpr uint32_t kLockedText = 0xFF9B9B9Bu;
 
 bool gOpen = false;
 bool gPauseMenuActive = false;
-bool gShowEverywhere = false;
+// Start in Everywhere mode because LeviLamroid may call enable() before it
+// sends the persisted module configuration callback. Starting false caused
+// enable() to unregister the button before the saved radio value arrived.
+bool gShowEverywhere = true;
 float gUiScale = 1.0f;
 bool gJavaStyle = false;
 bool gPopupEnabled = true;
@@ -550,7 +553,7 @@ public:
         if(!pl::modmenu::ModuleBuilder(std::string(kModule),"Advancements")
             .description("Java-style advancement trees with icons, labels, descriptions, and live achievement updates.")
             .defaultEnabled(true).hideInHudEditor(true)
-            .config("visibility","Show Advancements",pl::modmenu::ConfigType::Radio,"0","Pause screen only,Everywhere")
+            .config("visibility","Show Advancements",pl::modmenu::ConfigType::Radio,"1","Pause screen only,Everywhere")
             .config("ui_scale","Advancements UI scale",pl::modmenu::ConfigType::SliderFloat,"1.00","0.00","1.00")
             .config("ui_style","Experimental UI style",pl::modmenu::ConfigType::Radio,"0","Default UI,Java UI")
             .config("popup","Advancement popup",pl::modmenu::ConfigType::Toggle,"1")

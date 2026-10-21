@@ -14,7 +14,7 @@ manifest = {
     "name": "Advancements",
     "author": "Electrocharge",
     "description": "Minecraft-style advancement trees with category icons, labels, descriptions, and LeviLamroid pause-menu integration.",
-    "version": "0.9.6",
+    "version": "0.9.7",
     "entry": "libAdvancementsLeviLamroid.so",
     "icon": "icon.jpg",
     "minecraft_versions": ["1.26.5*.**"],
@@ -28,3 +28,8 @@ with zipfile.ZipFile(a.output, "w", zipfile.ZIP_DEFLATED, 9) as z:
     z.writestr("manifest.json", json.dumps(manifest, indent=2) + "\n")
     z.write(a.library, "libAdvancementsLeviLamroid.so")
     z.write(a.icon, "icon.jpg")
+    resource_root = Path(__file__).resolve().parent.parent / "resource_packs"
+    if resource_root.is_dir():
+        for resource_file in resource_root.rglob("*"):
+            if resource_file.is_file():
+                z.write(resource_file, resource_file.relative_to(resource_root.parent).as_posix())

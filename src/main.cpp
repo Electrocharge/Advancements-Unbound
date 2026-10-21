@@ -58,10 +58,10 @@ constexpr uint32_t kLockedText = 0xFF9B9B9Bu;
 bool gOpen = false;
 bool gPauseMenuActive = false;
 bool gPauseStateInitialized = false;
-// Start in Everywhere mode because LeviLamroid may call enable() before it
-// sends the persisted module configuration callback. Starting false caused
-// enable() to unregister the button before the saved radio value arrived.
-bool gShowEverywhere = true;
+// Pause-only uses the resource-pack button inserted directly into
+// pause_screen.json. The floating Preloader button is registered only after
+// the user selects Everywhere.
+bool gShowEverywhere = false;
 float gUiScale = 1.0f;
 bool gJavaStyle = false;
 bool gPopupEnabled = true;
@@ -490,6 +490,14 @@ void onVisibleButton(std::string_view, pl::modmenu::ButtonEvent event, float) {
     drawPanel();
 }
 
+void onJsonAdvancementsButton(void *, void *) {
+    if (!ll::ui::isInPauseMenu()) return;
+    gPauseMenuActive = true;
+    gOpen = !gOpen;
+    if (gOpen) gSelected = 0;
+    drawPanel();
+}
+
 bool registerVisibleButton() {
     pl::modmenu::ButtonInfo info;
     info.buttonId = std::string(kVisibleButton);
@@ -512,18 +520,16 @@ bool registerVisibleButton() {
 }
 
 void syncButtonVisibility() {
-    const bool visible = gShowEverywhere || gPauseMenuActive;
-    if (visible) {
+    // Pause-only is provided by the real pause_screen.json control. The
+    // floating button is intentionally reserved for Everywhere mode.
+    pl::modmenu::unregisterButton(kVisibleButton);
+    if (gShowEverywhere) {
         registerVisibleButton();
         pl::modmenu::setModuleEnabled(kModule, true);
     } else {
-        // LeviLamroid may retain an already-created floating control after
-        // unregisterButton(). Disable the owning module as well so the visual
-        // control is removed from the active overlay.
-        gOpen = false;
-        pl::modmenu::submitDrawCommands(kModule, {});
-        pl::modmenu::setModuleEnabled(kModule, false);
-        pl::modmenu::unregisterButton(kVisibleButton);
+        // Keep the module enabled so the native panel can render after the
+        // JSON pause-screen button is pressed.
+        pl::modmenu::setModuleEnabled(kModule, true);
     }
 }
 
@@ -591,19 +597,15 @@ public:
         if(!pl::modmenu::ModuleBuilder(std::string(kModule),"Advancements")
             .description("Java-style advancement trees with icons, labels, descriptions, and live achievement updates.")
             .defaultEnabled(true).hideInHudEditor(true)
-            .config("visibility","Show Advancements",pl::modmenu::ConfigType::Radio,"1","Pause screen only,Everywhere")
+            .config("visibility","Show Advancements",pl::modmenu::ConfigType::Radio,"0","Pause screen only,Everywhere")
             .config("ui_scale","Advancements UI scale",pl::modmenu::ConfigType::SliderFloat,"1.00","0.00","1.00")
             .config("ui_style","Revamped UI",pl::modmenu::ConfigType::Radio,"0","Default UI,Revamped UI")
             .config("popup","Advancement popup",pl::modmenu::ConfigType::Toggle,"1")
             .config("chat","Advancement chat message",pl::modmenu::ConfigType::Toggle,"1")
             .onConfigChanged(onConfigChanged).registerModule()) { logLine("load failed: module registration"); return false; }
-        // Pause-only is the default. The button is registered by the pause
-        // callback after the title screen opens. Register once immediately as
-        // a fallback because some LeviLamroid builds load a mod after the
-        // initial pause/start-menu lifecycle event and do not replay it.
-        const bool buttonRegistered = registerVisibleButton();
-        logLine(std::string("initial Advancements button registration: ") +
-                (buttonRegistered ? "success" : "failed"));
+        ll::ui::registerButton("button.advancements_open", onJsonAdvancementsButton);
+        logLine("registered native pause_screen button handler");
+        if (gShowEverywhere) registerVisibleButton();
         gCompleted.assign(256,false);
         constexpr std::string_view chatSignature = "? ? ? D1 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 59 D0 3B D5 F3 03 00 AA F4 03 05 AA";
         gDisplayClientMessageTarget = pl::memory::resolveSignature(chatSignature, "libminecraftpe.so");

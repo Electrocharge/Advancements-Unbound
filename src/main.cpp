@@ -465,8 +465,10 @@ void onConfigChanged(std::string_view moduleId, std::string_view key, std::strin
             return static_cast<char>(std::tolower(c));
         });
         gJavaStyle = style == "1" || style == "java" || style == "java ui" ||
-                     style.find("java") != std::string::npos;
-        logLine(std::string("Java UI state: ") + (gJavaStyle ? "enabled" : "disabled"));
+                     style == "revamped" || style == "revamped ui" ||
+                     style.find("java") != std::string::npos ||
+                     style.find("revamped") != std::string::npos;
+        logLine(std::string("Revamped UI state: ") + (gJavaStyle ? "enabled" : "disabled"));
         drawPanel();
     }
     if (key==kPopup) { gPopupEnabled=value=="1"; if (!gPopupEnabled) drawPanel(); }
@@ -510,9 +512,18 @@ bool registerVisibleButton() {
 }
 
 void syncButtonVisibility() {
-    pl::modmenu::unregisterButton(kVisibleButton);
-    if (gShowEverywhere || gPauseMenuActive) {
+    const bool visible = gShowEverywhere || gPauseMenuActive;
+    if (visible) {
         registerVisibleButton();
+        pl::modmenu::setModuleEnabled(kModule, true);
+    } else {
+        // LeviLamroid may retain an already-created floating control after
+        // unregisterButton(). Disable the owning module as well so the visual
+        // control is removed from the active overlay.
+        gOpen = false;
+        pl::modmenu::submitDrawCommands(kModule, {});
+        pl::modmenu::setModuleEnabled(kModule, false);
+        pl::modmenu::unregisterButton(kVisibleButton);
     }
 }
 
@@ -582,7 +593,7 @@ public:
             .defaultEnabled(true).hideInHudEditor(true)
             .config("visibility","Show Advancements",pl::modmenu::ConfigType::Radio,"1","Pause screen only,Everywhere")
             .config("ui_scale","Advancements UI scale",pl::modmenu::ConfigType::SliderFloat,"1.00","0.00","1.00")
-            .config("ui_style","Experimental UI style",pl::modmenu::ConfigType::Radio,"0","Default UI,Java UI")
+            .config("ui_style","Revamped UI",pl::modmenu::ConfigType::Radio,"0","Default UI,Revamped UI")
             .config("popup","Advancement popup",pl::modmenu::ConfigType::Toggle,"1")
             .config("chat","Advancement chat message",pl::modmenu::ConfigType::Toggle,"1")
             .onConfigChanged(onConfigChanged).registerModule()) { logLine("load failed: module registration"); return false; }

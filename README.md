@@ -1,4 +1,4 @@
-# Advancements 0.9.5
+# Advancements 0.9.6
 
 Advancements is an Android ARM64 native mod for LeviLaunchroid/LeviLamroid and Minecraft Bedrock `1.26.5*.**`. It provides five Minecraft-style advancement categories, embedded Minecraft item icons, locked/unlocked node states, completion popups, completion chat messages, per-world session state, a scale slider, and Default UI/Java UI styles.
 
@@ -22,7 +22,7 @@ LeviLaunchroid settings include:
 
 Both completion notifications can be enabled simultaneously. The popup is drawn at the lower-right so it does not overlap Bedrock’s recipe-unlock notification area. Completion state is held separately for each active world/level pointer and is usable in creative and pre-existing worlds; it is not a global completed/uncompleted flag.
 
-The Java UI is an interactive native advancement tree styled after Java Edition: tabs, connected node lines, selected-node details, dimmed locked icons, and completion coloring. The style parser accepts both numeric radio values and literal labels such as `Java`, `Java UI`, and `Everywhere`. It is not a non-interactive screenshot overlay.
+The **Revamped UI** option is an interactive native advancement tree styled after Java Edition: tabs, connected node lines, selected-node details, dimmed locked icons, and completion coloring. The parser accepts both numeric radio values and legacy/new labels such as `Java`, `Java UI`, and `Revamped UI`. It is not a non-interactive screenshot overlay.
 
 ## Build
 

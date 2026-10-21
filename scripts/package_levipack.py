@@ -14,13 +14,13 @@ manifest = {
     "name": "Advancements",
     "author": "Electrocharge",
     "description": "Minecraft-style advancement trees with category icons, labels, descriptions, and LeviLamroid pause-menu integration.",
-    "version": "0.9.8",
+    "version": "0.9.9",
     "entry": "libAdvancementsLeviLamroid.so",
     "icon": "icon.jpg",
     "minecraft_versions": ["1.26.5*.**"],
     "dependencies": ["LeviLamroid"],
     "overwrite_files": ["icon.jpg"],
-    "overwrite_folders": []
+    "overwrite_folders": ["resource_packs"]
 }
 
 a.output.parent.mkdir(parents=True, exist_ok=True)

@@ -58,10 +58,10 @@ constexpr uint32_t kLockedText = 0xFF9B9B9Bu;
 bool gOpen = false;
 bool gPauseMenuActive = false;
 bool gPauseStateInitialized = false;
-// Pause-only uses the resource-pack button inserted directly into
-// pause_screen.json. The floating Preloader button is registered only after
-// the user selects Everywhere.
-bool gShowEverywhere = false;
+// Start with a visible fallback so the module remains usable if the launcher
+// has not yet delivered its persisted radio configuration. Pause-only also
+// has a native pause_screen.json control when the resource pack is mounted.
+bool gShowEverywhere = true;
 float gUiScale = 1.0f;
 bool gJavaStyle = false;
 bool gPopupEnabled = true;
@@ -597,7 +597,7 @@ public:
         if(!pl::modmenu::ModuleBuilder(std::string(kModule),"Advancements")
             .description("Java-style advancement trees with icons, labels, descriptions, and live achievement updates.")
             .defaultEnabled(true).hideInHudEditor(true)
-            .config("visibility","Show Advancements",pl::modmenu::ConfigType::Radio,"0","Pause screen only,Everywhere")
+            .config("visibility","Show Advancements",pl::modmenu::ConfigType::Radio,"1","Pause screen only,Everywhere")
             .config("ui_scale","Advancements UI scale",pl::modmenu::ConfigType::SliderFloat,"1.00","0.00","1.00")
             .config("ui_style","Revamped UI",pl::modmenu::ConfigType::Radio,"0","Default UI,Revamped UI")
             .config("popup","Advancement popup",pl::modmenu::ConfigType::Toggle,"1")
@@ -605,7 +605,9 @@ public:
             .onConfigChanged(onConfigChanged).registerModule()) { logLine("load failed: module registration"); return false; }
         ll::ui::registerButton("button.advancements_open", onJsonAdvancementsButton);
         logLine("registered native pause_screen button handler");
-        if (gShowEverywhere) registerVisibleButton();
+        const bool buttonRegistered = registerVisibleButton();
+        logLine(std::string("initial floating fallback registration: ") +
+                (buttonRegistered ? "success" : "failed"));
         gCompleted.assign(256,false);
         constexpr std::string_view chatSignature = "? ? ? D1 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 59 D0 3B D5 F3 03 00 AA F4 03 05 AA";
         gDisplayClientMessageTarget = pl::memory::resolveSignature(chatSignature, "libminecraftpe.so");

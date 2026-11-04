@@ -179,5 +179,3 @@ inline void onMenuExit(void (*cb)()) {
 }
 
 } // namespace ll::ui
-
-#include "ll/api/inventory/PlayerInventory.h"

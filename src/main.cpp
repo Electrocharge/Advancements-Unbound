@@ -66,6 +66,7 @@ float gUiScale = 1.0f;
 bool gJavaStyle = false;
 bool gPopupEnabled = true;
 bool gChatEnabled = true;
+bool gJsonButtonRegistered = false;
 std::string gPopupTitle;
 std::string gPopupDescription;
 std::uint64_t gPopupUntilMs = 0;
@@ -498,6 +499,16 @@ void onJsonAdvancementsButton(void *, void *) {
     drawPanel();
 }
 
+void registerJsonAdvancementsButton() {
+    // LeviLamroid appends handlers instead of replacing them. Guard this
+    // registration so load() followed by enable() does not toggle the panel
+    // twice for one JSON button click.
+    if (gJsonButtonRegistered) return;
+    ll::ui::registerButton("button.advancements_open", onJsonAdvancementsButton);
+    gJsonButtonRegistered = true;
+    logLine("registered button.advancements_open handler");
+}
+
 bool registerVisibleButton() {
     pl::modmenu::ButtonInfo info;
     info.buttonId = std::string(kVisibleButton);
@@ -603,8 +614,7 @@ public:
             .config("popup","Advancement popup",pl::modmenu::ConfigType::Toggle,"1")
             .config("chat","Advancement chat message",pl::modmenu::ConfigType::Toggle,"1")
             .onConfigChanged(onConfigChanged).registerModule()) { logLine("load failed: module registration"); return false; }
-        ll::ui::registerButton("button.advancements_open", onJsonAdvancementsButton);
-        logLine("registered native pause_screen button handler");
+        registerJsonAdvancementsButton();
         const bool buttonRegistered = registerVisibleButton();
         logLine(std::string("initial floating fallback registration: ") +
                 (buttonRegistered ? "success" : "failed"));
@@ -637,7 +647,7 @@ public:
         logLine("load complete: hooks and event listeners registered");
         return true;
     }
-    bool enable(pl::mod::ModContext &) { logLine("enable"); pl::modmenu::setModuleEnabled(kModule,true); syncButtonVisibility(); return true; }
+    bool enable(pl::mod::ModContext &) { logLine("enable"); registerJsonAdvancementsButton(); pl::modmenu::setModuleEnabled(kModule,true); syncButtonVisibility(); return true; }
     bool disable(pl::mod::ModContext &) { logLine("disable"); gOpen=false;drawPanel();pl::modmenu::setModuleEnabled(kModule,false);pl::modmenu::unregisterButton(kVisibleButton); return true; }
     bool unload(pl::mod::ModContext &) {
         logLine("unload"); gOpen=false;pl::modmenu::submitDrawCommands(kModule,{});
@@ -646,6 +656,7 @@ public:
         gDisplayClientMessageOriginal=nullptr; gDisplayClientMessageTarget=0; gLastGuiData=nullptr; gWorldKey=0; gWorldCompleted.clear();
         gGuiDataAddMessageHook.reset();
         gGuiDataAddMessageOriginal=nullptr; gGuiDataAddMessageTarget=0;
+        gJsonButtonRegistered = false;
         pl::modmenu::unregisterModule(kModule);gBoardTexture.clear();gCompleted.clear();return true;
     }
 };

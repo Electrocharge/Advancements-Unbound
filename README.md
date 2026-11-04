@@ -1,10 +1,10 @@
-# Advancements 0.9.9
+# Advancements 1.0.0
 
 Advancements is an Android ARM64 native mod for LeviLaunchroid/LeviLamroid and Minecraft Bedrock `1.26.5*.**`. It provides five Minecraft-style advancement categories, embedded Minecraft item icons, locked/unlocked node states, completion popups, completion chat messages, per-world session state, a scale slider, and Default UI/Java UI styles.
 
 ## LeviLamroid integration
 
-This version does not include or link against NMDK. It uses LeviLamroid’s public APIs for pause-menu lifecycle callbacks, render-surface dimensions, pause-state polling, Preloader draw commands, touch callbacks, and mod registration. The LeviPack explicitly declares `resource_packs` for deployment, and the native floating button is registered at startup as a fallback. **Pause screen only** also uses a real `ui/pause_screen.json` control (`button.advancements_open`) mounted at the root of the LeviLamroid `resource_packs` directory. Selecting **Everywhere** keeps the floating button active outside the pause screen.
+This version does not include or link against NMDK. It uses LeviLamroid’s public APIs for pause-menu lifecycle callbacks, render-surface dimensions, pause-state polling, Preloader draw commands, touch callbacks, and mod registration. The LeviPack explicitly declares `resource_packs` for deployment, and the native floating button is registered at startup as a fallback. **Pause screen only** also uses a real `ui/pause_screen.json` control (`button.advancements_open`) mounted at the root of the LeviLamroid `resource_packs` directory. Selecting **Everywhere** keeps the floating button active outside the pause screen. The JSON button handler is registered only once; this prevents a load/enable double-registration from opening and immediately closing the panel on one tap.
 
 The mod still uses Preloader’s native draw-command and signature-hook interfaces for rendering and for observing Bedrock `GuiData` chat traffic. Completion matching is deliberately title/key based so recipe-unlock messages cannot unlock unrelated advancements. The chat hook accepts catalog titles and known Bedrock achievement aliases; notifications are deduplicated per world-session key.
 

@@ -1,40 +1,27 @@
 #pragma once
-#include "mc/client/ClientInstance.h"
-#include "mc/world/level/Level.h"
-#include "mc/world/actor/player/LocalPlayer.h"
-
 #include <dlfcn.h>
 
+namespace mc {
+class ClientInstance;
+class Level;
+namespace world { class Actor; }
+}
+
 namespace ll::service {
-
-inline ClientInstance* getClientInstance() {
-    static ClientInstance sInstance{};
-    return &sInstance;
-}
-
-inline Level* getLevel() {
+inline mc::Level* getLevel() {
     using GetLevelFn = void* (*)();
-    static GetLevelFn sFn = (GetLevelFn)dlsym(RTLD_DEFAULT, "ll_service_get_level");
-    if (sFn) {
-        if (void* lvl = sFn()) return reinterpret_cast<Level*>(lvl);
-    }
-    static Level sLevel{};
-    return &sLevel;
+    static auto fn = reinterpret_cast<GetLevelFn>(dlsym(RTLD_DEFAULT, "ll_service_get_level"));
+    return fn ? reinterpret_cast<mc::Level*>(fn()) : nullptr;
 }
-
-inline Level* getMultiPlayerLevel() {
-    return getLevel();
+inline mc::ClientInstance* getClientInstance() {
+    using GetClientFn = void* (*)();
+    static auto fn = reinterpret_cast<GetClientFn>(dlsym(RTLD_DEFAULT, "ll_service_get_client_instance"));
+    return fn ? reinterpret_cast<mc::ClientInstance*>(fn()) : nullptr;
 }
-
-inline LocalPlayer* getLocalPlayer() {
+inline mc::Level* getMultiPlayerLevel() { return getLevel(); }
+inline void* getLocalPlayer() {
     using GetPlayerFn = void* (*)();
-    static GetPlayerFn sFn = (GetPlayerFn)dlsym(RTLD_DEFAULT, "ll_service_get_local_player");
-    if (sFn) {
-        if (void* p = sFn()) return reinterpret_cast<LocalPlayer*>(p);
-    }
-    auto* client = getClientInstance();
-    return client ? client->getLocalPlayer() : nullptr;
+    static auto fn = reinterpret_cast<GetPlayerFn>(dlsym(RTLD_DEFAULT, "ll_service_get_local_player"));
+    return fn ? fn() : nullptr;
 }
-
-} // namespace ll::service
-
+}

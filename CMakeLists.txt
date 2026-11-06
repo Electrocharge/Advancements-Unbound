@@ -19,14 +19,9 @@ if(PRELOADER_LIBRARY AND EXISTS "${PRELOADER_LIBRARY}")
 endif()
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
-set(ADVANCEMENTS_PRELOADER_PACKAGE_ARG)
-if(PRELOADER_LIBRARY AND EXISTS "${PRELOADER_LIBRARY}")
-    set(ADVANCEMENTS_PRELOADER_PACKAGE_ARG --preloader "${PRELOADER_LIBRARY}")
-endif()
 add_custom_command(TARGET Advancements POST_BUILD
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/package_levipack.py"
             --library "$<TARGET_FILE:Advancements>"
             --icon "${CMAKE_SOURCE_DIR}/assets/icon.jpg"
             --output "$<TARGET_FILE_DIR:Advancements>/Advancements.levipack"
-            ${ADVANCEMENTS_PRELOADER_PACKAGE_ARG}
     VERBATIM)

@@ -464,6 +464,7 @@ public:
             pl::modmenu::registerImage(javaTextureId(texture.id), texture.rgba, texture.width, texture.height);
         }
         if(!pl::modmenu::ModuleBuilder(std::string(kModule),"Advancements")
+            .modId("advancements")
             .description("Java-style advancement trees with icons, labels, descriptions, and live achievement updates.")
             .defaultEnabled(true).hideInHudEditor(true)
             .config("ui_scale","Advancements UI scale",pl::modmenu::ConfigType::SliderFloat,"1.00","0.00","1.00")

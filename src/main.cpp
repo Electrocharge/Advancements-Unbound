@@ -20,10 +20,6 @@
 #include <pl/memory/Hook.hpp>
 #include <pl/memory/Signature.hpp>
 
-#include <ll/api/service/Bedrock.h>
-#include <ll/api/ui/UI.h>
-#include <ll/api/render/Render.h>
-
 #include "advancements/Version.hpp"
 #include "advancements/catalog.hpp"
 #include "advancements/icons.hpp"
@@ -35,7 +31,6 @@ void logLine(std::string_view message) {
 }
 constexpr std::string_view kModule = "advancements_android_icons";
 constexpr std::string_view kVisibleButton = "advancements.icons.open";
-constexpr std::string_view kVisibility = "visibility";
 constexpr std::string_view kUiStyle = "ui_style";
 constexpr std::string_view kPopup = "popup";
 constexpr std::string_view kChat = "chat";
@@ -56,17 +51,10 @@ constexpr uint32_t kText = 0xFFF5F5F5u;
 constexpr uint32_t kLockedText = 0xFF9B9B9Bu;
 
 bool gOpen = false;
-bool gPauseMenuActive = false;
-bool gPauseStateInitialized = false;
-// Start with a visible fallback so the module remains usable if the launcher
-// has not yet delivered its persisted radio configuration. Pause-only also
-// has a native pause_screen.json control when the resource pack is mounted.
-bool gShowEverywhere = true;
 float gUiScale = 1.0f;
 bool gJavaStyle = false;
 bool gPopupEnabled = true;
 bool gChatEnabled = true;
-bool gJsonButtonRegistered = false;
 std::string gPopupTitle;
 std::string gPopupDescription;
 std::uint64_t gPopupUntilMs = 0;
@@ -90,7 +78,7 @@ std::uintptr_t gWorldKey = 0;
 std::unordered_map<std::uintptr_t, std::vector<bool>> gWorldCompleted;
 std::vector<unsigned char> gBoardTexture;
 struct SurfaceSize { float width{}; float height{}; };
-SurfaceSize gHudSurface;
+SurfaceSize gHudSurface{1920.f, 1080.f};
 
 float gPanelX = 0.f, gPanelY = 0.f, gPanelW = 0.f, gPanelH = 0.f;
 float gTabX = 0.f, gTabW = 0.f, gTabY = 0.f, gTabH = 0.f;
@@ -455,11 +443,6 @@ bool onTouch(const pl::input::TouchEvent &event) {
 void onConfigChanged(std::string_view moduleId, std::string_view key, std::string_view value) {
     if (moduleId != kModule) return;
     logLine("config changed: key="+std::string(key)+" value="+std::string(value));
-    if (key==kVisibility) {
-        gShowEverywhere = value == "1" || value == "Everywhere" || value == "everywhere";
-        syncButtonVisibility();
-        drawPanel();
-    }
     if (key==kUiStyle) {
         std::string style(value);
         std::transform(style.begin(), style.end(), style.begin(), [](unsigned char c) {
@@ -485,28 +468,9 @@ void onConfigChanged(std::string_view moduleId, std::string_view key, std::strin
 
 void onVisibleButton(std::string_view, pl::modmenu::ButtonEvent event, float) {
     if (event != pl::modmenu::ButtonEvent::Click) return;
-    if (!gShowEverywhere && !gPauseMenuActive) return;
     gOpen = !gOpen;
     if (gOpen) gSelected = 0;
     drawPanel();
-}
-
-void onJsonAdvancementsButton(void *, void *) {
-    if (!ll::ui::isInPauseMenu()) return;
-    gPauseMenuActive = true;
-    gOpen = !gOpen;
-    if (gOpen) gSelected = 0;
-    drawPanel();
-}
-
-void registerJsonAdvancementsButton() {
-    // LeviLamroid appends handlers instead of replacing them. Guard this
-    // registration so load() followed by enable() does not toggle the panel
-    // twice for one JSON button click.
-    if (gJsonButtonRegistered) return;
-    ll::ui::registerButton("button.advancements_open", onJsonAdvancementsButton);
-    gJsonButtonRegistered = true;
-    logLine("registered button.advancements_open handler");
 }
 
 bool registerVisibleButton() {
@@ -531,66 +495,9 @@ bool registerVisibleButton() {
 }
 
 void syncButtonVisibility() {
-    // Pause-only is provided by the real pause_screen.json control. The
-    // floating button is intentionally reserved for Everywhere mode.
     pl::modmenu::unregisterButton(kVisibleButton);
-    if (gShowEverywhere) {
-        registerVisibleButton();
-        pl::modmenu::setModuleEnabled(kModule, true);
-    } else {
-        // Keep the module enabled so the native panel can render after the
-        // JSON pause-screen button is pressed.
-        pl::modmenu::setModuleEnabled(kModule, true);
-    }
-}
-
-void onPauseMenuOpen(void *) {
-    gPauseMenuActive = true;
-    const auto *level = ll::service::getLevel();
-    const auto nextKey = reinterpret_cast<std::uintptr_t>(level);
-    logLine("LeviLamroid pause menu opened: level=" + std::to_string(nextKey));
-    if (nextKey != 0 && nextKey != gWorldKey) {
-        if (gWorldKey != 0) gWorldCompleted[gWorldKey] = gCompleted;
-        gWorldKey = nextKey;
-        auto &state = gWorldCompleted[gWorldKey];
-        if (state.empty()) state.assign(256, false);
-        gCompleted = state;
-    }
-    syncButtonVisibility();
-}
-
-void onPauseMenuClose(void *) {
-    gPauseMenuActive = false;
-    gOpen = false;
-    drawPanel();
-    logLine("LeviLamroid pause menu closed");
-    syncButtonVisibility();
-}
-
-void onStartMenuOpen() {
-    if (!gShowEverywhere) {
-        gPauseMenuActive = false;
-        gOpen = false;
-        drawPanel();
-        syncButtonVisibility();
-    }
-}
-
-void refreshPauseVisibility() {
-    if (gShowEverywhere) {
-        gPauseStateInitialized = false;
-        return;
-    }
-    const bool inPause = ll::ui::isInPauseMenu();
-    if (gPauseStateInitialized && inPause == gPauseMenuActive) return;
-    gPauseStateInitialized = true;
-    gPauseMenuActive = inPause;
-    logLine(std::string("polled pause state: ") + (inPause ? "open" : "closed"));
-    if (!inPause) {
-        gOpen = false;
-        pl::modmenu::submitDrawCommands(kModule, {});
-    }
-    syncButtonVisibility();
+    registerVisibleButton();
+    pl::modmenu::setModuleEnabled(kModule, true);
 }
 
 class AdvancementsClean {
@@ -608,13 +515,11 @@ public:
         if(!pl::modmenu::ModuleBuilder(std::string(kModule),"Advancements")
             .description("Java-style advancement trees with icons, labels, descriptions, and live achievement updates.")
             .defaultEnabled(true).hideInHudEditor(true)
-            .config("visibility","Show Advancements",pl::modmenu::ConfigType::Radio,"1","Pause screen only,Everywhere")
             .config("ui_scale","Advancements UI scale",pl::modmenu::ConfigType::SliderFloat,"1.00","0.00","1.00")
             .config("ui_style","Revamped UI",pl::modmenu::ConfigType::Radio,"0","Default UI,Revamped UI")
             .config("popup","Advancement popup",pl::modmenu::ConfigType::Toggle,"1")
             .config("chat","Advancement chat message",pl::modmenu::ConfigType::Toggle,"1")
             .onConfigChanged(onConfigChanged).registerModule()) { logLine("load failed: module registration"); return false; }
-        registerJsonAdvancementsButton();
         const bool buttonRegistered = registerVisibleButton();
         logLine(std::string("initial floating fallback registration: ") +
                 (buttonRegistered ? "success" : "failed"));
@@ -632,22 +537,10 @@ public:
         }
         logLine("GuiData addMessage hook target="+std::to_string(gGuiDataAddMessageTarget)+" installed="+((gGuiDataAddMessageOriginal)?"true":"false"));
         pl::input::registerTouchCallback(onTouch);
-        ll::render::registerPostClearCallback([](int width, int height) {
-            gHudSurface = {static_cast<float>(width), static_cast<float>(height)};
-            refreshPauseVisibility();
-            if (gOpen) drawPanel(); else if (gPopupUntilMs > nowMs()) drawPopupOnly();
-        });
-        ll::ui::onPauseMenuOpen(onPauseMenuOpen);
-        ll::ui::onPauseMenuClose(onPauseMenuClose);
-        ll::ui::onStartMenuOpen(onStartMenuOpen);
-        // LeviLamroid routes custom button events through its pause-screen UI
-        // hooks. The floating PreLoader button is registered only while the
-        // pause screen is active unless the user selects Everywhere.
-        logLine("registered LeviLamroid pause-menu callbacks");
-        logLine("load complete: hooks and event listeners registered");
+        logLine("load complete: standalone Preloader hooks and event listeners registered");
         return true;
     }
-    bool enable(pl::mod::ModContext &) { logLine("enable"); registerJsonAdvancementsButton(); pl::modmenu::setModuleEnabled(kModule,true); syncButtonVisibility(); return true; }
+    bool enable(pl::mod::ModContext &) { logLine("enable"); pl::modmenu::setModuleEnabled(kModule,true); syncButtonVisibility(); return true; }
     bool disable(pl::mod::ModContext &) { logLine("disable"); gOpen=false;drawPanel();pl::modmenu::setModuleEnabled(kModule,false);pl::modmenu::unregisterButton(kVisibleButton); return true; }
     bool unload(pl::mod::ModContext &) {
         logLine("unload"); gOpen=false;pl::modmenu::submitDrawCommands(kModule,{});
@@ -656,7 +549,6 @@ public:
         gDisplayClientMessageOriginal=nullptr; gDisplayClientMessageTarget=0; gLastGuiData=nullptr; gWorldKey=0; gWorldCompleted.clear();
         gGuiDataAddMessageHook.reset();
         gGuiDataAddMessageOriginal=nullptr; gGuiDataAddMessageTarget=0;
-        gJsonButtonRegistered = false;
         pl::modmenu::unregisterModule(kModule);gBoardTexture.clear();gCompleted.clear();return true;
     }
 };

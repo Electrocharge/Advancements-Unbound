@@ -1,38 +1,35 @@
-# Advancements 1.0.1
+# Advancements 1.1.0
 
-Advancements is an Android ARM64 native mod for LeviLaunchroid/LeviLamroid and Minecraft Bedrock `1.26.5*.**`. It provides five Minecraft-style advancement categories, embedded Minecraft item icons, locked/unlocked node states, completion popups, completion chat messages, per-world session state, a scale slider, and Default UI/Java UI styles.
+Advancements is a standalone Android ARM64 native mod for Bedrock `1.26.5*.**`. It provides five Minecraft-style advancement categories, embedded item icons, locked/unlocked node states, completion popups, completion chat messages, per-world session state, a UI scale setting, and Default UI/Revamped UI styles.
 
-## LeviLamroid integration
+## Standalone behavior
 
-This version does not include or link against NMDK. It uses LeviLamroid’s public APIs for pause-menu lifecycle callbacks, render-surface dimensions, pause-state polling, Preloader draw commands, touch callbacks, and mod registration. The LeviPack explicitly declares `resource_packs` for deployment, and the native floating button is registered at startup as a fallback. **Pause screen only** also uses a real `ui/pause_screen.json` control (`button.advancements_open`) mounted at the root of the LeviLamroid `resource_packs` directory. Selecting **Everywhere** keeps the floating button active outside the pause screen. The JSON button handler is registered only once; this prevents a load/enable double-registration from opening and immediately closing the panel on one tap.
+This release has no LeviLamroid runtime dependency and does not use LeviLamroid APIs. It uses the Preloader native mod, mod-menu, touch, draw-command, and signature-hook interfaces directly. The Advancements button is always available as an in-game floating touch button; there is no pause-menu-only mode and no pause-screen resource-pack modification.
 
-The mod still uses Preloader’s native draw-command and signature-hook interfaces for rendering and for observing Bedrock `GuiData` chat traffic. Completion matching is deliberately title/key based so recipe-unlock messages cannot unlock unrelated advancements. The chat hook accepts catalog titles and known Bedrock achievement aliases; notifications are deduplicated per world-session key.
+The package contains only the native library and icon. It does not overwrite resource packs or inject pause-screen JSON.
 
 ## Features
 
-The five categories are Minecraft, Nether, The End, Adventure, and Husbandry. The catalog retains all 126 entries in their original categories. Nodes use embedded authentic Minecraft item textures selected from their advancement IDs and descriptions: diamond swords for combat, bows for ranged achievements, fishing rods for fishing/travel, elytra for flight/End entries, Netherite swords for Nether entries, diamond pickaxes for mining/crafting, food icons for Husbandry, and crafting tables as a fallback. Locked icons are dimmed.
+The five categories are Minecraft, Nether, The End, Adventure, and Husbandry. The catalog retains all 126 entries in their original categories. Nodes use embedded Minecraft item textures selected from their advancement IDs and descriptions, and locked icons are dimmed.
 
-LeviLaunchroid settings include:
+Settings include:
 
-- **Show Advancements:** Pause screen only or Everywhere.
 - **Advancements UI scale:** `0.00` to `1.00`; `0.00` hides the panel.
-- **Experimental UI style:** Default UI or Java UI.
+- **Revamped UI:** Default UI or Revamped UI.
 - **Advancement popup:** independent toggle.
 - **Advancement chat message:** independent toggle.
 
-Both completion notifications can be enabled simultaneously. The popup is drawn at the lower-right so it does not overlap Bedrock’s recipe-unlock notification area. Completion state is held separately for each active world/level pointer and is usable in creative and pre-existing worlds; it is not a global completed/uncompleted flag.
-
-The **Revamped UI** option is an interactive native advancement tree styled after Java Edition: tabs, connected node lines, selected-node details, dimmed locked icons, and completion coloring. The parser accepts both numeric radio values and legacy/new labels such as `Java`, `Java UI`, and `Revamped UI`. It is not a non-interactive screenshot overlay.
+The completion popup is drawn in the lower-right so it does not overlap Bedrock recipe notifications. Completion state is tracked separately by active world/session key where the host provides world identity.
 
 ## Build
 
-The build expects the LeviLamroid source/header tree, Preloader headers/library, Android NDK r28c or compatible, and fmt headers. Configure `LEVILAMROID_DIR`, `PRELOADER_INCLUDE_DIR`, `PRELOADER_LIBRARY`, and `FMT_INCLUDE_DIR` if their locations differ:
+The build requires Android NDK r28c or compatible, CMake, Ninja, Preloader headers/library, and fmt headers if required by the host SDK. Configure `PRELOADER_INCLUDE_DIR` and `PRELOADER_LIBRARY` when those paths differ:
 
 ```sh
-cmake -S . -B build-levilamroid -G Ninja \
+cmake -S . -B build-standalone -G Ninja \
   -DCMAKE_TOOLCHAIN_FILE=/path/to/android-ndk/build/cmake/android.toolchain.cmake \
   -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24
-cmake --build build-levilamroid --parallel
+cmake --build build-standalone --parallel
 ```
 
-The build produces `libAdvancementsLeviLamroid.so` and `AdvancementsLeviLamroid.levipack`. The LeviPack manifest declares LeviLamroid as its runtime dependency and uses author `Electrocharge`.
+The build produces `libAdvancements.so` and `Advancements.levipack`. The LeviPack manifest has an empty dependency list and targets Minecraft `1.26.5*.**`.

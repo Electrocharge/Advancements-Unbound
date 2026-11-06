@@ -8,7 +8,6 @@
 #include <cstring>
 #include <cstdlib>
 #include <fstream>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -17,8 +16,6 @@
 #include <pl/Mod.hpp>
 #include <pl/ModMenu.hpp>
 #include <pl/Input.hpp>
-#include <pl/memory/Hook.hpp>
-#include <pl/memory/Signature.hpp>
 
 #include "advancements/Version.hpp"
 #include "advancements/catalog.hpp"
@@ -59,15 +56,6 @@ std::string gPopupTitle;
 std::string gPopupDescription;
 std::uint64_t gPopupUntilMs = 0;
 std::string gPopupId;
-void *gLastGuiData = nullptr;
-using DisplayClientMessageFn = void (*)(void *, const std::string &, const std::optional<std::string> &, bool);
-DisplayClientMessageFn gDisplayClientMessageOriginal = nullptr;
-std::uintptr_t gDisplayClientMessageTarget = 0;
-pl::memory::HookHandle gDisplayClientMessageHook;
-using GuiDataAddMessageFn = void (*)(void *, void *, std::int32_t);
-GuiDataAddMessageFn gGuiDataAddMessageOriginal = nullptr;
-std::uintptr_t gGuiDataAddMessageTarget = 0;
-pl::memory::HookHandle gGuiDataAddMessageHook;
 void drawPanel();
 void drawPopupOnly();
 void syncButtonVisibility();
@@ -141,13 +129,8 @@ void announceCompletion(int category, std::size_t index) {
     logLine("completion detected: category="+std::to_string(category)+" index="+std::to_string(index)+" id="+entry.id+" title="+entry.title);
     gCompleted[categoryBase(category) + index] = true;
     if (gWorldKey != 0) gWorldCompleted[gWorldKey] = gCompleted;
-    if (gChatEnabled && gDisplayClientMessageOriginal && gLastGuiData) {
-        const std::string message = std::string("[Advancements] ") + entry.title + " - " + entry.description;
-        const std::optional<std::string> filtered;
-        gDisplayClientMessageOriginal(gLastGuiData, message, filtered, false);
-        logLine("advancement chat sent: "+message);
-    } else if (gChatEnabled) {
-        logLine(std::string("advancement chat not sent: hook=")+((gDisplayClientMessageOriginal)?"true":"false")+" guiData="+((gLastGuiData)?"true":"false"));
+    if (gChatEnabled) {
+        logLine(std::string("advancement chat notification requested: ") + entry.title);
     }
     if (gPopupEnabled) {
         gPopupId = entry.id;
@@ -189,38 +172,6 @@ void markCompletedByText(std::string_view text) {
             }
             if (matches && !gCompleted[categoryBase(category) + i]) announceCompletion(category, i);
         }
-    }
-}
-
-void displayClientMessageHook(void *guiData, const std::string &message,
-                              const std::optional<std::string> &filtered,
-                              bool ttsRequired) {
-    gLastGuiData = guiData;
-    logLine("GuiData displayClientMessage: text='" + message + "'");
-    if (gDisplayClientMessageOriginal) {
-        gDisplayClientMessageOriginal(guiData, message, filtered, ttsRequired);
-    }
-    markCompletedByText(message);
-}
-
-void guiDataAddMessageHook(void *guiData, void *guiMessage,
-                           std::int32_t profanityFilterContext) {
-    gLastGuiData = guiData;
-    logLine("GuiData addMessage: message=" +
-            std::to_string(reinterpret_cast<std::uintptr_t>(guiMessage)));
-    if (guiMessage) {
-        // This is the Bedrock 1.26 GuiMessage full-string field used by the
-        // previous working port. Guard the small type range before reading it.
-        auto *bytes = static_cast<unsigned char *>(guiMessage);
-        const auto type = *reinterpret_cast<const std::int32_t *>(bytes);
-        if (type >= 1 && type <= 8) {
-            const auto &fullString =
-                *reinterpret_cast<const std::string *>(bytes + 0x70);
-            markCompletedByText(fullString);
-        }
-    }
-    if (gGuiDataAddMessageOriginal) {
-        gGuiDataAddMessageOriginal(guiData, guiMessage, profanityFilterContext);
     }
 }
 
@@ -524,20 +475,8 @@ public:
         logLine(std::string("initial floating fallback registration: ") +
                 (buttonRegistered ? "success" : "failed"));
         gCompleted.assign(256,false);
-        constexpr std::string_view chatSignature = "? ? ? D1 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 59 D0 3B D5 F3 03 00 AA F4 03 05 AA";
-        gDisplayClientMessageTarget = pl::memory::resolveSignature(chatSignature, "libminecraftpe.so");
-        if (gDisplayClientMessageTarget) {
-            gDisplayClientMessageHook = pl::memory::HookHandle(reinterpret_cast<void *>(gDisplayClientMessageTarget), reinterpret_cast<void *>(displayClientMessageHook), reinterpret_cast<void **>(&gDisplayClientMessageOriginal));
-        }
-        logLine("displayClientMessage hook target="+std::to_string(gDisplayClientMessageTarget)+" installed="+((gDisplayClientMessageOriginal)?"true":"false"));
-        constexpr std::string_view addMessageSignature = "? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 FD 03 00 91 ? ? ? A9 F4 03 02 2A F3 03 00 AA 1F 01 09 EB";
-        gGuiDataAddMessageTarget = pl::memory::resolveSignature(addMessageSignature, "libminecraftpe.so");
-        if (gGuiDataAddMessageTarget) {
-            gGuiDataAddMessageHook = pl::memory::HookHandle(reinterpret_cast<void *>(gGuiDataAddMessageTarget), reinterpret_cast<void *>(guiDataAddMessageHook), reinterpret_cast<void **>(&gGuiDataAddMessageOriginal));
-        }
-        logLine("GuiData addMessage hook target="+std::to_string(gGuiDataAddMessageTarget)+" installed="+((gGuiDataAddMessageOriginal)?"true":"false"));
         pl::input::registerTouchCallback(onTouch);
-        logLine("load complete: standalone Preloader hooks and event listeners registered");
+        logLine("load complete: standalone Preloader UI and touch listeners registered");
         return true;
     }
     bool enable(pl::mod::ModContext &) { logLine("enable"); pl::modmenu::setModuleEnabled(kModule,true); syncButtonVisibility(); return true; }
@@ -545,10 +484,7 @@ public:
     bool unload(pl::mod::ModContext &) {
         logLine("unload"); gOpen=false;pl::modmenu::submitDrawCommands(kModule,{});
         pl::modmenu::unregisterButton(kVisibleButton);
-        gDisplayClientMessageHook.reset();
-        gDisplayClientMessageOriginal=nullptr; gDisplayClientMessageTarget=0; gLastGuiData=nullptr; gWorldKey=0; gWorldCompleted.clear();
-        gGuiDataAddMessageHook.reset();
-        gGuiDataAddMessageOriginal=nullptr; gGuiDataAddMessageTarget=0;
+        gWorldKey=0; gWorldCompleted.clear();
         pl::modmenu::unregisterModule(kModule);gBoardTexture.clear();gCompleted.clear();return true;
     }
 };

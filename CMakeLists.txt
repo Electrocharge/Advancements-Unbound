@@ -8,7 +8,7 @@ set(PRELOADER_INCLUDE_DIR "" CACHE PATH "Optional Preloader headers")
 set(PRELOADER_LIBRARY "" CACHE FILEPATH "Optional Preloader ARM64 library")
 
 add_library(Advancements SHARED src/main.cpp)
-target_include_directories(Advancements PRIVATE "${CMAKE_SOURCE_DIR}/compat/include" include "${CMAKE_SOURCE_DIR}/vendor/LeviLamroid/include" "${PRELOADER_INCLUDE_DIR}")
+target_include_directories(Advancements PRIVATE "${PRELOADER_INCLUDE_DIR}" "${CMAKE_SOURCE_DIR}/compat/include" include "${CMAKE_SOURCE_DIR}/vendor/LeviLamroid/include")
 target_compile_options(Advancements PRIVATE -include cstdlib -fexceptions -fvisibility=hidden -fvisibility-inlines-hidden -ffunction-sections -fdata-sections -Os -Wno-deprecated-volatile -Wno-return-type)
 target_link_options(Advancements PRIVATE -Wl,-z,max-page-size=16384 -Wl,--gc-sections -Wl,--as-needed -Wl,-z,relro -Wl,-z,now -Wl,--exclude-libs,ALL -Wl,--strip-all)
 target_link_libraries(Advancements PRIVATE android log dl c++_static c++abi)
@@ -19,9 +19,14 @@ if(PRELOADER_LIBRARY AND EXISTS "${PRELOADER_LIBRARY}")
 endif()
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(ADVANCEMENTS_PRELOADER_PACKAGE_ARG)
+if(PRELOADER_LIBRARY AND EXISTS "${PRELOADER_LIBRARY}")
+    set(ADVANCEMENTS_PRELOADER_PACKAGE_ARG --preloader "${PRELOADER_LIBRARY}")
+endif()
 add_custom_command(TARGET Advancements POST_BUILD
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/package_levipack.py"
             --library "$<TARGET_FILE:Advancements>"
             --icon "${CMAKE_SOURCE_DIR}/assets/icon.jpg"
             --output "$<TARGET_FILE_DIR:Advancements>/Advancements.levipack"
+            ${ADVANCEMENTS_PRELOADER_PACKAGE_ARG}
     VERBATIM)

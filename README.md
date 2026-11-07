@@ -1,12 +1,12 @@
-# Advancements 1.2.4
+# Advancements 1.1.1
 
 Advancements is a standalone Android ARM64 native mod for Bedrock `1.26.5*.**`. It provides five Minecraft-style advancement categories, embedded item icons, locked/unlocked node states, completion popups, completion chat messages, per-world session state, a UI scale setting, and Default UI/Revamped UI styles.
 
 ## Standalone behavior
 
-This release is a pure Android Preloader native mod. It uses only the official `preloader-android` 0.2.2 mod-menu, touch, and draw-command SDK. Preloader is launcher-owned and is not included inside this LeviPack. The Advancements button is always available as an in-game floating touch button; there is no pause-menu-only mode and no pause-screen resource-pack modification.
+This release has no LeviLamroid runtime dependency and does not use LeviLamroid APIs. It uses the Preloader native mod, mod-menu, touch, draw-command, and signature-hook interfaces directly. The Advancements button is always available as an in-game floating touch button; there is no pause-menu-only mode and no pause-screen resource-pack modification.
 
-The package contains only the native library and icon. It does not overwrite resource packs, inject pause-screen JSON, or bundle the launcher-owned preloader runtime. The native library uses Android's shared `libc++_shared.so`, matching the launcher and avoiding C++ container/allocator crashes when registering the module. The binary has no sandbox/build-machine RPATH entries.
+The package contains only the native library and icon. It does not overwrite resource packs or inject pause-screen JSON. This build avoids the incompatible legacy `HookHandle`/signature-hook ABI exposed by some LeviLaunchroid builds, so it can load without the missing-symbol failure.
 
 ## Features
 
@@ -23,7 +23,7 @@ The completion popup is drawn in the lower-right so it does not overlap Bedrock 
 
 ## Build
 
-The build requires Android NDK r28c or compatible, CMake, Ninja, the official `preloader-android` 0.2.2 headers/library, and fmt headers if required by the host SDK. Configure `PRELOADER_INCLUDE_DIR` and `PRELOADER_LIBRARY` when those paths differ:
+The build requires Android NDK r28c or compatible, CMake, Ninja, Preloader headers/library, and fmt headers if required by the host SDK. Configure `PRELOADER_INCLUDE_DIR` and `PRELOADER_LIBRARY` when those paths differ:
 
 ```sh
 cmake -S . -B build-standalone -G Ninja \

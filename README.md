@@ -1,4 +1,4 @@
-# Advancements 1.1.3
+# Advancements 1.1.4
 
 Advancements is a standalone Android ARM64 native mod for Bedrock `1.26.5*.**`. It provides five Minecraft-style advancement categories, embedded item icons, locked/unlocked node states, completion popups, completion chat messages, per-world session state, a UI scale setting, and Default UI/Revamped UI styles.
 
@@ -20,6 +20,8 @@ Settings include:
 - **Advancement chat message:** independent toggle.
 
 The completion popup is drawn in the lower-right so it does not overlap Bedrock recipe notifications. Completion state is tracked separately by active world/session key where the host provides world identity.
+
+The main Advancements panel now refreshes the launcher HUD surface size before drawing, keeping both Default UI and Revamped UI centered on devices whose actual display size differs from the fallback coordinate size.
 
 ## Build
 

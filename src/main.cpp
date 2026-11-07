@@ -68,6 +68,14 @@ std::vector<unsigned char> gBoardTexture;
 struct SurfaceSize { float width{}; float height{}; };
 SurfaceSize gHudSurface{1920.f, 1080.f};
 
+SurfaceSize hudSurface() {
+    const auto live = pl::modmenu::getHudSurfaceSize();
+    if (live.width > 0.f && live.height > 0.f) {
+        gHudSurface = {live.width, live.height};
+    }
+    return gHudSurface;
+}
+
 float gPanelX = 0.f, gPanelY = 0.f, gPanelW = 0.f, gPanelH = 0.f;
 float gTabX = 0.f, gTabW = 0.f, gTabY = 0.f, gTabH = 0.f;
 float gViewX = 0.f, gViewY = 0.f, gViewW = 0.f, gViewH = 0.f;
@@ -192,7 +200,7 @@ void createBoardTexture() {
 void drawDefaultPanel() {
     if (!gOpen) { pl::modmenu::submitDrawCommands(kModule, {}); return; }
     if (gUiScale <= 0.001f) { pl::modmenu::submitDrawCommands(kModule, {}); return; }
-    const auto surface = gHudSurface;
+    const auto surface = hudSurface();
     if (surface.width <= 0.f || surface.height <= 0.f) return;
     const float scale = std::clamp(std::min(surface.width / 1120.f, surface.height / 560.f), 0.72f, 1.35f) * std::clamp(gUiScale, 0.0f, 1.0f);
     const float w = 840.f * scale, h = 500.f * scale;
@@ -303,7 +311,7 @@ std::string javaTextureId(std::string_view id) {
 void drawJavaPanel() {
     if (!gOpen) { pl::modmenu::submitDrawCommands(kModule, {}); return; }
     if (gUiScale <= 0.001f) { pl::modmenu::submitDrawCommands(kModule, {}); return; }
-    const auto surface = gHudSurface;
+    const auto surface = hudSurface();
     if (surface.width <= 0.f || surface.height <= 0.f) return;
     const float scale = std::clamp(std::min(surface.width / 720.f, surface.height / 470.f), 0.70f, 1.45f) * gUiScale;
     const float w=720.f*scale,h=470.f*scale,x=(surface.width-w)*.5f,y=(surface.height-h)*.5f;
@@ -356,7 +364,7 @@ void drawPanel() { if (gJavaStyle) drawJavaPanel(); else drawDefaultPanel(); }
 
 void drawPopupOnly() {
     if (!gPopupEnabled || gPopupUntilMs <= nowMs()) { pl::modmenu::submitDrawCommands(kModule, {}); return; }
-    const auto surface = gHudSurface;
+    const auto surface = hudSurface();
     const float scale = std::clamp(std::min(surface.width / 1000.f, surface.height / 620.f), 0.65f, 1.15f) * gUiScale;
     // Bedrock places recipe-unlocked notifications in the upper-right area.
     // Keep this mod's advancement toast in the lower-right so both remain

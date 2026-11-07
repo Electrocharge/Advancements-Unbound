@@ -456,13 +456,6 @@ public:
     bool load(pl::mod::ModContext &) {
         logLine("load begin: version="+std::string(advancements::Version));
         createBoardTexture();
-        pl::modmenu::registerImage("advancements.board",gBoardTexture,64,64);
-        for (const auto &icon : advancements::icons::all) {
-            pl::modmenu::registerImage(iconImageId(icon), icon.rgba, icon.width, icon.height);
-        }
-        for (const auto &texture : advancements::java_ui::all) {
-            pl::modmenu::registerImage(javaTextureId(texture.id), texture.rgba, texture.width, texture.height);
-        }
         if(!pl::modmenu::ModuleBuilder(std::string(kModule),"Advancements")
             .description("Java-style advancement trees with icons, labels, descriptions, and live achievement updates.")
             .defaultEnabled(true).hideInHudEditor(true)

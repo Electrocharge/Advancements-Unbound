@@ -1,10 +1,10 @@
-# Advancements 1.2.3
+# Advancements 1.2.4
 
 Advancements is a standalone Android ARM64 native mod for Bedrock `1.26.5*.**`. It provides five Minecraft-style advancement categories, embedded item icons, locked/unlocked node states, completion popups, completion chat messages, per-world session state, a UI scale setting, and Default UI/Revamped UI styles.
 
 ## Standalone behavior
 
-This release has no LeviLamroid runtime dependency and does not use LeviLamroid APIs. It uses the official `preloader-android` 0.2.2 native mod, mod-menu, touch, and draw-command SDK. Preloader is launcher-owned and is not included inside this LeviPack. The Advancements button is always available as an in-game floating touch button; there is no pause-menu-only mode and no pause-screen resource-pack modification.
+This release is a pure Android Preloader native mod. It uses only the official `preloader-android` 0.2.2 mod-menu, touch, and draw-command SDK. Preloader is launcher-owned and is not included inside this LeviPack. The Advancements button is always available as an in-game floating touch button; there is no pause-menu-only mode and no pause-screen resource-pack modification.
 
 The package contains only the native library and icon. It does not overwrite resource packs, inject pause-screen JSON, or bundle the launcher-owned preloader runtime. The native library uses Android's shared `libc++_shared.so`, matching the launcher and avoiding C++ container/allocator crashes when registering the module. The binary has no sandbox/build-machine RPATH entries.
 

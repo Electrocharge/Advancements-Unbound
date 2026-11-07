@@ -9,7 +9,7 @@ set(PRELOADER_INCLUDE_DIR "" CACHE PATH "Optional Preloader headers")
 set(PRELOADER_LIBRARY "" CACHE FILEPATH "Optional Preloader ARM64 library")
 
 add_library(Advancements SHARED src/main.cpp)
-target_include_directories(Advancements PRIVATE "${PRELOADER_INCLUDE_DIR}" "${CMAKE_SOURCE_DIR}/compat/include" include "${CMAKE_SOURCE_DIR}/vendor/LeviLamroid/include")
+target_include_directories(Advancements PRIVATE "${PRELOADER_INCLUDE_DIR}" include)
 target_compile_options(Advancements PRIVATE -include cstdlib -fexceptions -fvisibility=hidden -fvisibility-inlines-hidden -ffunction-sections -fdata-sections -Os -Wno-deprecated-volatile -Wno-return-type)
 target_link_options(Advancements PRIVATE -Wl,-z,max-page-size=16384 -Wl,--gc-sections -Wl,--as-needed -Wl,-z,relro -Wl,-z,now -Wl,--exclude-libs,ALL -Wl,--strip-all)
 target_link_libraries(Advancements PRIVATE android log dl c++_shared)

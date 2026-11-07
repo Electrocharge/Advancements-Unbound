@@ -14,7 +14,7 @@ manifest = {
     "name": "Advancements",
     "author": "Electrocharge",
     "description": "Minecraft-style advancement trees with category icons, labels, descriptions, and completion notifications.",
-    "version": "1.2.2",
+    "version": "1.2.3",
     "entry": "libAdvancements.so",
     "icon": "icon.jpg",
     "minecraft_versions": ["1.26.5*.**"],

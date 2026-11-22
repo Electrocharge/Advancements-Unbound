@@ -1,12 +1,12 @@
-# Advancements 1.1.4
+# Advancements 1.1.5
 
-Advancements is a standalone Android ARM64 native mod for Bedrock `1.26.5*.**`. It provides five Minecraft-style advancement categories, embedded item icons, locked/unlocked node states, completion popups, completion chat messages, per-world session state, a UI scale setting, and Default UI/Revamped UI styles.
+Advancements is a standalone Android ARM64 native mod for Bedrock `1.26.6*.**`. It provides five Minecraft-style advancement categories, embedded item icons, locked/unlocked node states, completion popups, completion chat messages, per-world session state, a UI scale setting, and Default UI/Revamped UI styles.
 
 ## Standalone behavior
 
-This release has no LeviLamroid or NMDK runtime dependency. It uses the Preloader native mod, mod-menu, touch, and draw-command interfaces directly. It is linked against the launcher-owned `libpreloader.so` ABI pinned by LeviLaunchroid v1.6.0; that library is not bundled into the LeviPack. The Advancements button is always available as an in-game floating touch button; there is no pause-menu-only mode and no pause-screen resource-pack modification.
+This release has no LeviLamroid or NMDK runtime dependency. It uses the Preloader native mod, mod-menu, touch, and draw-command interfaces directly. It is linked against the launcher-owned `libpreloader.so` ABI pinned by LeviLaunchroid v1.6.0; that library is not bundled into the LeviPack. The Advancements button remains available as an in-game floating touch button, and the package now also injects the pause-screen button.
 
-The package contains only the native library and icon. It does not overwrite resource packs or inject pause-screen JSON. The image-registration call is not imported; advancement icons are rendered using draw primitives instead. The native library has a `DT_NEEDED` entry for `libpreloader.so`, which makes Android resolve the launcher’s built-in Preloader before resolving the mod’s Mod Menu symbols.
+The package also contains a small resource pack under `resources/minecraft_resource_packs/advancements`. It adds the row to `pause_screen.json` and supplies the localized label. The native library resolves LeviLaunchroid’s exported pause-state query and bridges touches only in the lower centered row where that JSON button is inserted; it does not guess a Minecraft `ScreenController` RVA. The image-registration call is not imported; advancement icons are rendered using draw primitives instead. The native library has a `DT_NEEDED` entry for `libpreloader.so`, which makes Android resolve the launcher’s built-in Preloader before resolving the mod’s Mod Menu symbols.
 
 ## Features
 
@@ -34,4 +34,4 @@ cmake -S . -B build-standalone -G Ninja \
 cmake --build build-standalone --parallel
 ```
 
-The build produces `libAdvancements.so` and `Advancements.levipack`. The LeviPack manifest has an empty dependency list and targets Minecraft `1.26.5*.**`.
+The build produces `libAdvancements.so` and `Advancements.levipack`. The LeviPack manifest has an empty dependency list and targets Minecraft `1.26.6*.**`. The package script includes the resource-pack directory automatically and does not bundle a Preloader.

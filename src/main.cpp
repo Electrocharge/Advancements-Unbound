@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <dlfcn.h>
 #include <fstream>
 #include <string>
 #include <string_view>
@@ -67,6 +68,30 @@ std::unordered_map<std::uintptr_t, std::vector<bool>> gWorldCompleted;
 std::vector<unsigned char> gBoardTexture;
 struct SurfaceSize { float width{}; float height{}; };
 SurfaceSize gHudSurface{1920.f, 1080.f};
+
+using PauseMenuQuery = unsigned char (*)(void *, void *);
+PauseMenuQuery gPauseMenuQuery = nullptr;
+bool gPauseMenuQueryResolved = false;
+
+bool pauseMenuOpen() {
+    if (!gPauseMenuQueryResolved) {
+        gPauseMenuQueryResolved = true;
+        constexpr const char *symbol =
+            "Java_org_levimc_launcher_preloader_PreloaderInput_nativeIsPauseMenuOpen";
+        void *address = dlsym(RTLD_DEFAULT, symbol);
+        if (!address) {
+            void *preloader = dlopen("libpreloader.so", RTLD_NOW | RTLD_NOLOAD);
+            if (preloader) address = dlsym(preloader, symbol);
+        }
+        if (address) {
+            gPauseMenuQuery = reinterpret_cast<PauseMenuQuery>(address);
+            logLine("resolved launcher pause-menu query");
+        } else {
+            logLine("launcher pause-menu query unavailable; pause button bridge disabled");
+        }
+    }
+    return gPauseMenuQuery && gPauseMenuQuery(nullptr, nullptr) != 0;
+}
 
 SurfaceSize hudSurface() {
     const auto live = pl::modmenu::getHudSurfaceSize();
@@ -385,6 +410,21 @@ void drawPopupOnly() {
 char entryGlyph(const char *title) { return title && *title ? static_cast<char>(std::toupper(static_cast<unsigned char>(*title))) : '?'; }
 
 bool onTouch(const pl::input::TouchEvent &event) {
+    if (event.action == 1 && !gOpen && pauseMenuOpen()) {
+        const auto surface = hudSurface();
+        const float nx = surface.width > 0.f ? event.x / surface.width : 0.f;
+        const float ny = surface.height > 0.f ? event.y / surface.height : 0.f;
+        // pause_screen.json inserts the row immediately above the bottom exit
+        // controls. Restrict the bridge to that centered lower menu band so
+        // ordinary pause-menu buttons continue to work normally.
+        if (nx >= 0.25f && nx <= 0.75f && ny >= 0.70f && ny <= 0.96f) {
+            gOpen = true;
+            gSelected = 0;
+            logLine("pause-screen Advancements button activated");
+            drawPanel();
+            return true;
+        }
+    }
     if (!gOpen || event.action != 1) return false;
     if (event.x < gPanelX || event.x > gPanelX+gPanelW || event.y < gTabY || event.y > gPanelY+gPanelH) return false;
     const float gap=5*(gPanelW/840.f);

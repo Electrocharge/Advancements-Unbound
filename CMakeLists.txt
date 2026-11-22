@@ -26,5 +26,6 @@ add_custom_command(TARGET Advancements POST_BUILD
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/package_levipack.py"
             --library "$<TARGET_FILE:Advancements>"
             --icon "${CMAKE_SOURCE_DIR}/assets/icon.jpg"
+            --resource-pack "${CMAKE_SOURCE_DIR}/assets/resource_pack"
             --output "$<TARGET_FILE_DIR:Advancements>/Advancements.levipack"
     VERBATIM)
